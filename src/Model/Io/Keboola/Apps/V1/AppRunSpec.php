@@ -88,4 +88,13 @@ class AppRunSpec extends AbstractModel
      * @var string|null
      */
     public $imageVersion = null;
+
+    /**
+     * Mode records how the parent App was running when this run was created.
+     * "prod" (default) for normal runs; "dev" for dev-mode runs. Treat absent
+     * or unknown values as "prod" for compatibility with legacy AppRun CRDs.
+     *
+     * @var string|null
+     */
+    public $mode = null;
 }

@@ -42,6 +42,7 @@ class AppRunModelTest extends TestCase
                 'startupLogs' => "foo\nbar\n",
                 'runtimeSize' => 'small',
                 'configVersion' => '1',
+                'mode' => 'dev',
             ],
             'status' => [
                 'syncedAt' => '2025-01-15T13:05:00Z',
@@ -77,6 +78,7 @@ class AppRunModelTest extends TestCase
         self::assertSame("foo\nbar\n", $appRun->spec->startupLogs);
         self::assertSame('small', $appRun->spec->runtimeSize);
         self::assertSame('1', $appRun->spec->configVersion);
+        self::assertSame('dev', $appRun->spec->mode);
 
         // PodRef
         self::assertNotNull($appRun->spec->podRef);
@@ -118,5 +120,6 @@ class AppRunModelTest extends TestCase
         self::assertSame('Finished', $serialized['spec']['state']);
         self::assertSame('small', $serialized['spec']['runtimeSize']);
         self::assertSame('1', $serialized['spec']['configVersion']);
+        self::assertSame('dev', $serialized['spec']['mode']);
     }
 }
