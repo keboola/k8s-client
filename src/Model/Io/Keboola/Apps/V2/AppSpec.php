@@ -83,4 +83,20 @@ class AppSpec extends AbstractModel
      * @var AppFeatures|null
      */
     public $features = null;
+
+    /**
+     * Mode selects how the app is run: "prod" (default) runs the app as-is;
+     * "dev" enables hot-reload via an in-pod git-watcher and the dev
+     * supervisord profile. Both Deployment and E2B backends honour Mode.
+     *
+     * @var string|null
+     */
+    public $mode = null;
+
+    /**
+     * Dev carries dev-mode-only knobs. Ignored when mode != "dev".
+     *
+     * @var AppDevSpec|null
+     */
+    public $dev = null;
 }

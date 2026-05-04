@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Keboola\K8sClient\Tests\Model\V2;
 
 use Keboola\K8sClient\Model\Io\Keboola\Apps\V2\App;
+use Keboola\K8sClient\Model\Io\Keboola\Apps\V2\AppDevSpec;
 use Keboola\K8sClient\Model\Io\Keboola\Apps\V2\AppFeatures;
 use Keboola\K8sClient\Model\Io\Keboola\Apps\V2\AppRuntime;
 use Keboola\K8sClient\Model\Io\Keboola\Apps\V2\AppSpec;
@@ -62,6 +63,11 @@ class AppModelTest extends TestCase
                     'backend' => [
                         'type' => 'e2bSandbox',
                     ],
+                ],
+                'mode' => 'dev',
+                'dev' => [
+                    'gitPollInterval' => '5s',
+                    'autoRunSetupOnDepChange' => false,
                 ],
                 'features' => [
                     'storageToken' => [
@@ -250,6 +256,13 @@ class AppModelTest extends TestCase
         self::assertNotNull($app->spec->runtime->backend);
         self::assertInstanceOf(Backend::class, $app->spec->runtime->backend);
         self::assertSame('e2bSandbox', $app->spec->runtime->backend->type);
+
+        // Mode + Dev
+        self::assertSame('dev', $app->spec->mode);
+        self::assertNotNull($app->spec->dev);
+        self::assertInstanceOf(AppDevSpec::class, $app->spec->dev);
+        self::assertSame('5s', $app->spec->dev->gitPollInterval);
+        self::assertFalse($app->spec->dev->autoRunSetupOnDepChange);
 
         // Features
         self::assertNotNull($app->spec->features);
@@ -474,6 +487,13 @@ class AppModelTest extends TestCase
         self::assertSame('small', $serialized['spec']['runtime']['size']);
         self::assertSame('e2bSandbox', $serialized['spec']['runtime']['backend']['type']);
         self::assertSame('small', $serialized['spec']['runtimeSize']);
+
+        // Verify mode + dev survive round-trip
+        self::assertArrayHasKey('mode', $serialized['spec']);
+        self::assertSame('dev', $serialized['spec']['mode']);
+        self::assertArrayHasKey('dev', $serialized['spec']);
+        self::assertSame('5s', $serialized['spec']['dev']['gitPollInterval']);
+        self::assertFalse($serialized['spec']['dev']['autoRunSetupOnDepChange']);
 
         // Verify containerSpec is present and podSpec is not
         self::assertArrayHasKey('containerSpec', $serialized['spec']);
