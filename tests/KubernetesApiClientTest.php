@@ -212,12 +212,13 @@ class KubernetesApiClientTest extends TestCase
         );
 
         $event = new Event(['name' => 'test-event']);
+        $responses = ['502 Bad Gateway', ['no' => 'kind'], $event];
 
         $eventsApiMock = $this->createMock(EventsApi::class);
-        $eventsApiMock->expects(self::exactly(3))
+        $eventsApiMock->expects(self::exactly(count($responses)))
             ->method('read')
             ->with(self::TEST_NAMESPACE, 'event-name')
-            ->willReturnOnConsecutiveCalls('502 Bad Gateway', ['no' => 'kind'], $event)
+            ->willReturnOnConsecutiveCalls(...$responses)
         ;
 
         $result = $client->clusterRequest(
