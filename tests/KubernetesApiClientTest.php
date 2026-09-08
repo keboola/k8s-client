@@ -14,11 +14,14 @@ use Kubernetes\Model\Io\K8s\Api\Core\V1\Event;
 use Kubernetes\Model\Io\K8s\Api\Core\V1\EventList;
 use Kubernetes\Model\Io\K8s\Apimachinery\Pkg\Apis\Meta\V1\Status;
 use PHPUnit\Framework\TestCase;
+use Retry\BackOff\NoBackOffPolicy;
+use Retry\Policy\SimpleRetryPolicy;
 use Retry\RetryProxy;
 
 class KubernetesApiClientTest extends TestCase
 {
     private const TEST_NAMESPACE = 'test-namespace';
+    private const MAX_ATTEMPTS = 3;
 
     public function testGetK8sNamespace(): void
     {
@@ -199,6 +202,127 @@ class KubernetesApiClientTest extends TestCase
                 $e->getMessage(),
             );
         }
+    }
+
+    public function testClusterRequestRetriesResultThatIsNotAK8sModel(): void
+    {
+        $client = new KubernetesApiClient(
+            $this->createRetryProxy(),
+            self::TEST_NAMESPACE,
+        );
+
+        $event = new Event(['name' => 'test-event']);
+
+        $eventsApiMock = $this->createMock(EventsApi::class);
+        $eventsApiMock->expects(self::exactly(3))
+            ->method('read')
+            ->with(self::TEST_NAMESPACE, 'event-name')
+            ->willReturnOnConsecutiveCalls('502 Bad Gateway', ['no' => 'kind'], $event)
+        ;
+
+        $result = $client->clusterRequest(
+            $eventsApiMock,
+            'read',
+            Event::class,
+            self::TEST_NAMESPACE,
+            'event-name',
+        );
+
+        self::assertSame($event, $result);
+    }
+
+    public function clusterRequestFailsOnRawResultProvider(): Generator
+    {
+        yield 'plain text body' => [
+            'result' => '502 Bad Gateway',
+            'expectedMessageSuffix' => 'found string: 502 Bad Gateway',
+        ];
+
+        yield 'json body without kind' => [
+            'result' => ['detail' => 'no kind here'],
+            'expectedMessageSuffix' => 'found array: {"detail":"no kind here"}',
+        ];
+
+        yield 'long body is truncated' => [
+            'result' => str_repeat('a', 600),
+            'expectedMessageSuffix' => 'found string: ' . str_repeat('a', 512) . '...',
+        ];
+    }
+
+    /**
+     * @dataProvider clusterRequestFailsOnRawResultProvider
+     */
+    public function testClusterRequestFailsOnRawResultAfterRetries(
+        mixed $result,
+        string $expectedMessageSuffix,
+    ): void {
+        $client = new KubernetesApiClient(
+            $this->createRetryProxy(),
+            self::TEST_NAMESPACE,
+        );
+
+        $eventsApiMock = $this->createMock(EventsApi::class);
+        $eventsApiMock->expects(self::exactly(self::MAX_ATTEMPTS))
+            ->method('read')
+            ->with(self::TEST_NAMESPACE, 'event-name')
+            ->willReturn($result)
+        ;
+
+        try {
+            $client->clusterRequest(
+                $eventsApiMock,
+                'read',
+                Event::class,
+                self::TEST_NAMESPACE,
+                'event-name',
+            );
+
+            $this->fail('Cluster request should throw KubernetesResponseException');
+        } catch (KubernetesResponseException $e) {
+            self::assertNull($e->getStatus());
+            self::assertSame(
+                sprintf(
+                    'Expected response class %s for request %s::read, %s',
+                    Event::class,
+                    get_class($eventsApiMock),
+                    $expectedMessageSuffix,
+                ),
+                $e->getMessage(),
+            );
+        }
+    }
+
+    public function testClusterRequestDoesNotRetryResultOfAnUnexpectedModelClass(): void
+    {
+        $client = new KubernetesApiClient(
+            $this->createRetryProxy(),
+            self::TEST_NAMESPACE,
+        );
+
+        $eventsApiMock = $this->createMock(EventsApi::class);
+        $eventsApiMock->expects(self::once())
+            ->method('read')
+            ->with(self::TEST_NAMESPACE, 'event-name')
+            ->willReturn($this->createMock(EventList::class))
+        ;
+
+        $this->expectException(KubernetesResponseException::class);
+
+        $client->clusterRequest(
+            $eventsApiMock,
+            'read',
+            Event::class,
+            self::TEST_NAMESPACE,
+            'event-name',
+        );
+    }
+
+    private function createRetryProxy(): RetryProxy
+    {
+        return new RetryProxy(
+            new SimpleRetryPolicy(self::MAX_ATTEMPTS),
+            new NoBackOffPolicy(),
+        );
     }
 
     private function createRetryProxyMock(): RetryProxy
